@@ -1,0 +1,46 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "调试版本管理测试",
+      "program": "${workspaceFolder}/tests/model.test.mjs",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "console": "internalConsole"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "调试本地服务（4174）",
+      "program": "${workspaceFolder}/server.mjs",
+      "env": {
+        "PORT": "4174",
+        "DATA_DIR": "${workspaceFolder}/test-output/debug-session"
+      },
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "console": "internalConsole"
+    },
+    {
+      "type": "msedge",
+      "request": "launch",
+      "name": "调试交互原型",
+      "url": "http://127.0.0.1:4173",
+      "webRoot": "${workspaceFolder}/public"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "调试媒体与备份测试",
+      "program": "${workspaceFolder}/tests/media.test.mjs",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "console": "internalConsole"
+    }
+  ]
+}

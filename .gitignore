@@ -1,0 +1,12 @@
+data/
+*.log
+test-output/
+dist/
+runtime/
+.env
+.env.*
+!.env.example
+*.tmp
+/*preview.png
+/scripts/add-delete-controls.py
+/scripts/add-image-workflow.py

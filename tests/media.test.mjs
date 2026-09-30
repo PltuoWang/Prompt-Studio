@@ -25,6 +25,14 @@ async function service(t,dataDir){
   const request=async(route,body,method='POST')=>{const response=await fetch(base+route,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});return {status:response.status,data:await response.json()};};
   return {base,request};
 }
+test('ZIP sharing endpoints remember destination, export, merge import, and reject stale restores',async t=>{
+  const dataDir=await temp(),destination=path.join(dataDir,'shares');const {base,request}=await service(t,dataDir);
+  assert.equal((await request('/api/package-settings',{folder:destination},'PUT')).status,200);
+  assert.equal((await (await fetch(base+'/api/package-settings')).json()).folder,destination);
+  const exported=await request('/api/packages',{backup:true,baseRevision:0});assert.equal(exported.status,200);assert.equal(exported.data.groups,6);
+  const restored=await request('/api/import-package',{file:exported.data.path,baseRevision:0});assert.equal(restored.status,200);assert.equal(restored.data.library.groups.length,12);
+  assert.equal((await request('/api/import-package',{file:exported.data.path,baseRevision:0})).status,409);
+});
 test('schema upgrade preserves every old image, prompt, version and draft without mutating input',()=>{
   const old=legacy(),before=clone(old),next=upgradeLibrary(old);assert.deepEqual(old,before);assert.equal(next.schema,2);
   for(let i=0;i<old.groups.length;i++)for(let j=0;j<old.groups[i].versions.length;j++){const a=old.groups[i].versions[j],b=next.groups[i].versions[j];assert.equal(a.prompt,b.prompt);assert.deepEqual(b.media,a.images.map(image=>({...image,kind:'image'})));assert.equal(b.generationType,'t2i');}

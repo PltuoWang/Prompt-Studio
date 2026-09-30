@@ -1,0 +1,46 @@
+appId: com.haifeng.promptstudio
+productName: Prompt Studio
+copyright: Copyright © 2026 Haifeng. All rights reserved.
+asar: true
+npmRebuild: false
+electronDist: node_modules/electron/dist
+directories:
+  output: release
+  buildResources: build
+files:
+  - package.json
+  - desktop/**/*
+  - public/**/*
+  - server.mjs
+  - media-store.mjs
+  - backups.mjs
+  - share-packages.mjs
+  - export-files.mjs
+  - build/icon.ico
+  - COPYRIGHT
+  - '!**/*.map'
+win:
+  icon: build/icon.ico
+  executableName: Prompt Studio
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+nsis:
+  artifactName: Prompt-Studio-Setup-${version}-${arch}.${ext}
+  oneClick: false
+  perMachine: false
+  allowElevation: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Prompt Studio
+  uninstallDisplayName: Prompt Studio
+  deleteAppDataOnUninstall: false
+  installerLanguages: [zh_CN, en_US]
+  language: '2052'
+  runAfterFinish: true
+portable:
+  artifactName: Prompt-Studio-Portable-${version}-${arch}.${ext}
+  requestExecutionLevel: user

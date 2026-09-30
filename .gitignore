@@ -3,6 +3,8 @@ data/
 test-output/
 dist/
 runtime/
+node_modules/
+release/
 .env
 .env.*
 !.env.example

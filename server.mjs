@@ -9,6 +9,7 @@ import {clone,validateLibrary,upgradeLibrary} from './public/model.js';
 import {exportFolder,saveVersionFiles} from './export-files.mjs';
 import {receiveMedia,serveMedia,validateMediaFiles} from './media-store.mjs';
 import {createBackup,prepareRestore,mergeLibrary} from './backups.mjs';
+import {createPackage,importPackage} from './share-packages.mjs';
 import {APP_INFO} from './public/version.js';
 const root=path.dirname(fileURLToPath(import.meta.url)),publicDir=path.join(root,'public');
 const dataDir=process.env.DATA_DIR||path.join(root,'data'),mediaDir=path.join(dataDir,'media'),port=Number(process.env.PORT||4173);
@@ -32,6 +33,9 @@ let queue=Promise.resolve(),exportQueue=Promise.resolve();
 const settingsFile=path.join(dataDir,'settings.json');let exportSettings={defaultFolder:''};
 try{const saved=JSON.parse(await readFile(settingsFile,'utf8'));if(saved.defaultFolder)exportSettings.defaultFolder=exportFolder(saved.defaultFolder);}catch(error){if(error.code!=='ENOENT')console.error('Cannot read export settings:',error.message);}
 async function saveExportSettings(folder){const next={defaultFolder:exportFolder(folder)};await writeFile(`${settingsFile}.tmp`,JSON.stringify(next,null,2));await rename(`${settingsFile}.tmp`,settingsFile);exportSettings=next;}
+const packageSettingsFile=path.join(dataDir,'package-settings.json');
+let packageFolder=path.join(os.homedir(),'Documents','Prompt Studio','备份与分享');
+try{packageFolder=exportFolder(JSON.parse(await readFile(packageSettingsFile,'utf8')).folder);}catch(error){if(error.code!=='ENOENT')console.error('Cannot read backup settings:',error.message);}
 function enqueue(operation){const result=queue.then(operation);queue=result.catch(()=>{});return result;}
 function assertRevision(revision){if(revision!==state.revision)throw Object.assign(new Error('资料已在另一窗口修改，请保留当前内容后刷新页面'),{status:409});}
 async function saveLibrary(library){validateLibrary(library);if(Buffer.byteLength(JSON.stringify(library))>40*1024*1024-1024)throw new Error('文字、封面与旧图资料超过 40 MB，请拆分资料库后再合并');await validateMediaFiles(library,mediaDir);const next={revision:state.revision+1,library};await writeFile(`${filename}.tmp`,JSON.stringify(next,null,2));await rename(`${filename}.tmp`,filename);state=next;return next;}
@@ -45,6 +49,7 @@ const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=
 export const server=http.createServer(async(req,res)=>{
   const json=(code,data)=>{res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(data));};
   try{
+    if(process.env.DESKTOP_TOKEN&&req.headers['x-prompt-studio-token']!==process.env.DESKTOP_TOKEN)return json(403,{error:'请通过 Prompt Studio 桌面窗口访问'});
     const allowedHosts=[`127.0.0.1:${server.address().port}`,`localhost:${server.address().port}`];
     if(!allowedHosts.includes(req.headers.host))return json(403,{error:'仅允许本机访问'});
     if(!['GET','HEAD'].includes(req.method)&&req.headers.origin&&!allowedHosts.map(host=>`http://${host}`).includes(req.headers.origin))return json(403,{error:'来源不被允许'});
@@ -83,6 +88,24 @@ export const server=http.createServer(async(req,res)=>{
         if(body.setDefault){try{await saveExportSettings(result.folder);}catch{result.warning='文件已保存，但默认文件夹未记住，请在设置中重试';}}
         json(200,{...result,defaultFolder:exportSettings.defaultFolder});
       });exportQueue=operation.catch(()=>{});await operation;return;
+    }
+    if(url.pathname==='/api/package-settings'){
+      if(req.method==='GET')return json(200,{folder:packageFolder});
+      if(req.method!=='PUT')return json(405,{error:'不支持此操作'});
+      const body=await readJSON(req,16000),folder=exportFolder(body.folder);
+      return await enqueue(async()=>{await writeFile(packageSettingsFile+'.tmp',JSON.stringify({folder}));await rename(packageSettingsFile+'.tmp',packageSettingsFile);packageFolder=folder;json(200,{folder});});
+    }
+    if(url.pathname==='/api/packages'){
+      if(req.method!=='POST')return json(405,{error:'不支持此操作'});
+      const body=await readJSON(req,16000);
+      const operation=exportQueue.then(async()=>{assertRevision(body.baseRevision);return json(200,await createPackage({library:clone(state.library),folder:body.folder||packageFolder,mediaDir,publicDir,backup:body.backup===true,groupId:body.groupId,includeDrafts:body.includeDrafts===true}));});
+      exportQueue=operation.catch(()=>{});await operation;return;
+    }
+    if(url.pathname==='/api/import-package'){
+      if(req.method!=='POST')return json(405,{error:'不支持此操作'});
+      const body=await readJSON(req,16000);assertRevision(body.baseRevision);
+      const imported=await importPackage({file:body.file,mediaDir});
+      return await enqueue(async()=>{assertRevision(body.baseRevision);const next=await saveLibrary(mergeLibrary(state.library,imported));json(200,{...next,imported:imported.groups.length});});
     }
     if(url.pathname==='/api/backups'){
       if(req.method!=='POST')return json(405,{error:'不支持此操作'});

@@ -1,0 +1,23 @@
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {spawnSync} from 'node:child_process';
+import {mkdir,writeFile,readFile,copyFile} from 'node:fs/promises';
+import {createReadStream} from 'node:fs';
+import {createHash} from 'node:crypto';
+const root=path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+if(process.platform!=='win32')throw Error('Build the Windows EXE on Windows.');
+const version=JSON.parse(await readFile(path.join(root,'package.json'),'utf8')).version;
+const clean=spawnSync('git',['diff','--quiet','HEAD'],{cwd:root,windowsHide:true});
+if(clean.status!==0)throw Error('Commit the release source before building to keep the source ZIP and EXE consistent.');
+const output=path.join(root,'release');await mkdir(output,{recursive:true});
+const result=spawnSync(process.execPath,[path.join(root,'node_modules','electron-builder','out','cli','cli.js'),'--win','--x64','--publish','never'],{cwd:root,stdio:'inherit',windowsHide:true,env:{...process.env,ELECTRON_BUILDER_CACHE:path.join(root,'test-output','builder-cache'),ELECTRON_CACHE:path.join(root,'test-output','electron-cache'),CSC_IDENTITY_AUTO_DISCOVERY:'false'}});
+if(result.status!==0)throw Error('Desktop packaging failed');
+const files=[`Prompt-Studio-Setup-${version}-x64.exe`,`Prompt-Studio-Portable-${version}-x64.exe`];
+const source=`Prompt-Studio-v${version}-source.zip`;
+const archive=spawnSync('git',['archive','--format=zip',`--prefix=Prompt-Studio-v${version}/`,`--output=${path.join(output,source)}`,'HEAD'],{cwd:root,encoding:'utf8',windowsHide:true});
+if(archive.status!==0)throw Error(archive.stderr||'Could not archive committed source');
+files.push(source);
+const sums=[];for(const name of files){const hash=createHash('sha256');for await(const chunk of createReadStream(path.join(output,name)))hash.update(chunk);sums.push(`${hash.digest('hex')}  ${name}`);}
+await writeFile(path.join(output,'SHA256SUMS.txt'),sums.join('\n')+'\n');
+await copyFile(path.join(root,'RELEASE-NOTES.md'),path.join(output,'RELEASE-NOTES.md'));
+console.log(`Desktop release ${version} ready:\n${files.join('\n')}`);
